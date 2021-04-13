@@ -1,0 +1,244 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja">
+  <head>
+    <title>Audio Marker</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" >
+    <script src="./wavesurfer.js"></script>
+  </head>
+  <body">
+
+    <form action="#" name="player">
+      <input type="file" id="mediaFile"  /><br/>
+      <input type="button" id="playButton" value="Play" onclick="playPause();"/>
+      <input type="button" id="rewind1Button" value="Rewind 1 sec." onclick="rewind1second();"/>
+      <input type="button" value="Go to:" onclick="goto();"/>
+      <input type="text" id="secondsFromStart" size="5" value="0"/>
+      <input type="button" value="Zoom In" onclick="zoomIn();"/>
+      <input type="button" id="zoBtn" value="Zoom Out" disabled onclick="zoomOut();"/>
+      <select id="speedSelector" onchange="speedController(this.value);">
+        <option>0.25</option>
+        <option>0.50</option>
+        <option>0.75</option>
+        <option selected="true">1.00</option>
+        <option>1.25</option>
+        <option>1.50</option>
+        <option>1.75</option>
+        <option>2.00</option>
+      </select>
+      <input type="button" value="Clear logging area" onclick="clearLoggingArea();"/>
+    </form>
+    <a id="osf" href="#" download="timeStamped.html" onclick="outputFile();">ログファイル出力</a>
+
+    <div id="waveform"></div>
+    <input id="timerField" size="8" disabled style="text-align:right"/>
+
+    <div id="loggingArea"></div>
+
+<script type="text/javascript">
+
+// Globals
+var btn = document.getElementById("playButton");
+var zoomOutButton = document.getElementById("zoBtn");
+var speedWheel = document.getElementById("speedSelector");
+var timerArea = document.getElementById("timerField");
+var currentElemNo = 0;
+var currentZoomFactor = 10;
+var minimumZoomFactor = 10;
+var zoomDelta = 5;
+
+// Wavesurfer setup
+var wavesurfer = WaveSurfer.create({
+  container: '#waveform' ,
+  waveColor: '#6495ed',
+  progressColor: '#b03a2e',
+  backend: 'MediaElement'     // it is to change speed without affecting the pitch
+});
+
+wavesurfer.on("play", function() {
+  btn.value = "Pause";
+  speedWheel.disabled = true;
+});
+
+wavesurfer.on("pause", function() {
+  btn.value = "Play";
+  speedWheel.disabled = false;
+});
+
+wavesurfer.on("finish", function() {
+  logTime(false, "  Paused: ", wavesurfer.getCurrentTime() - 0.01);
+  btn.value = "Play";
+  speedWheel.disabled = false;
+  wavesurfer.seekTo(0);
+});
+
+// Stopwatch control
+var timer = function() {
+  timerArea.value = (Math.floor(wavesurfer.getCurrentTime() * 100.0) / 100.0).toFixed(2);
+  if (!wavesurfer.isPlaying()) {
+    btn.value = "Play";
+  }
+};
+setInterval(timer, 10);
+
+// File reader
+window.addEventListener('DOMContentLoaded', function() {
+    var obj1 = document.getElementById("mediaFile");
+    obj1.addEventListener("change",function(evt){
+        var file = evt.target.files[0];
+        wavesurfer.load(window.URL.createObjectURL(file));
+    },false);
+ });
+
+
+// Logging section
+function logTime(freshLine, msg, ct) {
+  var formattedTime = Math.floor(ct * 100.0) / 100.0;
+  var logInfo = document.createTextNode(msg + formattedTime);
+
+  var baseDiv = document.getElementById("loggingArea");
+  if (freshLine) {
+    currentElemNo += 1;
+
+    // Create master div with dismiss button, and attach to base div.
+    var div = document.createElement("div");
+    div.id = "elem" + currentElemNo;
+    var dismissBtn = document.createElement("input");
+    dismissBtn.type = "button";
+    dismissBtn.value = "dismiss";
+    dismissBtn.onclick = function() {dismissSection(div);};
+    div.appendChild(dismissBtn);
+
+    // Add memo area.
+    var memo = document.createElement("input");
+    memo.type = "text";
+    memo.size = 40;
+    div.appendChild(memo);
+    baseDiv.appendChild(div);
+  }
+  var logLine = document.getElementById("elem" + currentElemNo);
+  logLine.appendChild(logInfo);
+  if (msg.match(/Paused/)) {    // When 'Pause' button pushed, add p.play button.
+    var start = Number(logLine.childNodes[2].data.match(/(\d+\.?\d*)/)[0]);
+    var stop = Number(logLine.childNodes[3].data.match(/(\d+\.?\d*)/)[0]);
+    var partialPlay = document.createElement("input");
+    partialPlay.type = "button";
+    partialPlay.value = "p.play";
+    partialPlay.onclick = function () {
+      wavesurfer.play(start, stop);
+    };
+    logLine.appendChild(partialPlay);
+  }
+  baseDiv.appendChild(logLine);
+}
+
+// Called when Play/Pause button is pushed.
+function playPause() {
+  if (!wavesurfer.isPlaying()) {
+    logTime(true, "Started: ", wavesurfer.getCurrentTime());
+    wavesurfer.play();
+  } else {
+    wavesurfer.pause();
+    logTime(false, "  Paused: ", wavesurfer.getCurrentTime());
+  }
+}
+
+// Called when rewind 1 sec. button is pushed.
+function rewind1second() {
+  wavesurfer.skipBackward(1.0);
+  logTime(true, "Rewinded: ", wavesurfer.getCurrentTime());
+}
+
+// Called when goto controll is activated.
+function goto() {
+  var field = document.getElementById("secondsFromStart");
+  wavesurfer.skip(field.value - wavesurfer.getCurrentTime());
+  logTime(true, "Jump to: ", wavesurfer.getCurrentTime());
+}
+
+// Erase each segment section
+function dismissSection(sect) {
+  document.getElementById("loggingArea").removeChild(sect);
+}
+
+// Called when clear-all-log button is pushed.
+function clearLoggingArea() {
+  var baseDiv = document.getElementById("loggingArea");
+  while (baseDiv.firstChild) {
+    baseDiv.removeChild(baseDiv.lastChild);
+  }
+}
+
+// Called when zoom-in button is pushed.
+function zoomIn() {
+  zoomOutButton.disabled = false;
+  currentZoomFactor += zoomDelta;
+  wavesurfer.zoom(currentZoomFactor);
+}
+
+// Called when zoom-out button is pushed.
+function zoomOut() {
+  if (currentZoomFactor > minimumZoomFactor) {
+    currentZoomFactor -= zoomDelta;
+    wavesurfer.zoom(currentZoomFactor);
+    if (currentZoomFactor == minimumZoomFactor) {
+      zoomOutButton.disabled = true;
+    }
+  }
+}
+
+// Called when speed-controll selector is changed.
+function speedController(speed) {
+  wavesurfer.setPlaybackRate(Number(speed));
+}
+
+function outputFile() {
+  var path = document.getElementById("mediaFile").value;
+  path = path.replace(/.+?fakepath\\/, "");
+
+  // Output Audio control section
+  var contents = "<audio id=\"audio01\" controls preload=\"auto\">\n  <source src=\"./" + path + "\" type=\"audio/mp3\">\n</audio>\n<select name=\"speed\" onChange=\"document.getElementById('audio01').playbackRate=this.value\">\n  <option>0.25</option>\n  <option>0.5</option>\n  <option>0.75</option>\n  <option selected=\"true\">1.0</option>\n  <option>1.25</option>\n  <option>1.5</option>\n  <option>1.75</option>\n  <option>2.0</option>\n</select>\n<input type=\"button\" id=\"pressButton\" value=\"Press and Hold to Rec.\" onMousedown=\"recStart();\" onMouseup=\"recStop();\">\n<input type=\"button\" value=\"Play\" onClick=\"playIt();\">\n<audio id=\"audio02\"></audio>\n<a id=\"dl\">Save</a>\n<hr>\n\n";
+
+  var baseDiv = document.getElementById("loggingArea");
+  for(i = 0; i < baseDiv.childElementCount; i++) {
+    var entry = baseDiv.childNodes[i];
+
+    var anchorText = entry.childNodes[1].value;
+    if (anchorText == "") {
+      anchorText = "Not specified.";
+    }
+    var startTime = entry.childNodes[2].data;
+    startTime = Number(startTime.match(/(\d+\.?\d*)/)[0]);
+    var stopTime = entry.childNodes[3];
+    if (stopTime == null) {
+      return;
+    } else {
+      stopTime = stopTime.data;
+    }
+    stopTime = Number(stopTime.match(/(\d+\.?\d*)/)[0]);
+
+    contents += "<a href=\"javascript:partialPlay(" + startTime + "," + stopTime + ");\">" + anchorText + "</a>\n<hr>\n";
+  }
+
+  // Output Script section
+  contents += "\n\n<\s\cript>\nfunction partialPlay(start, stop) {\n  var player = document.getElementById(\"audio01\");\n  player.currentTime = start;\n  player.ontimeupdate = \n    function() {\n      if (player.currentTime >= stop) {\n        player.pause();\n      }\n    };\n  player.play();\n}\n\n";
+
+  contents += "navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia;\nnavigator.getUserMedia({\n  audio: true,\n  video: false\n}, successFunc, function () {});\n\nvar recorder;\nvar chunks = [];\n\nfunction recStart() {\n  document.getElementById(\"pressButton\").value = \"Release to Stop Rec.\";\n  chunks = [];\n  recorder.start();\n}\n\nfunction recStop() {\n  document.getElementById(\"pressButton\").value = \"Press and Hold to Rec.\";\n  recorder.stop();\n}\n\nfunction playIt() {\n  var audioParts = document.getElementById(\"audio02\");\n  audioParts.src = URL.createObjectURL(new Blob(chunks));\n  audioParts.play();\n}\n\nfunction successFunc(stream) {\n  recorder = new MediaRecorder(stream, {\n    mimeType: 'video/webm;codecs=vp9'\n  });\n\n  recorder.addEventListener('dataavailable', function(ele) {\n    if (ele.data.size > 0) {\n      chunks.push(ele.data);\n    }\n  });\n\n  recorder.addEventListener('stop', function() {\n    var dl = document.querySelector(\"#dl\");\n    dl.href = URL.createObjectURL(new Blob(chunks));\n\n    dl.download = 'output.wav';\n  });\n}\n";
+
+  contents += "</\s\cript>\n";
+
+    var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    var blob = new Blob([ bom, contents ], { "type" : "text/plain" });
+    if (window.navigator.msSaveBlob) { 
+        window.navigator.msSaveBlob(blob, "timeStamped.html"); 
+        window.navigator.msSaveOrOpenBlob(blob, "timeStamped.html"); 
+    } else {
+        document.getElementById("osf").href =
+            window.URL.createObjectURL(blob);
+    }
+
+}
+
+</script>
+</body>
+</html>
