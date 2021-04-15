@@ -1,0 +1,86 @@
+﻿<audio id="audio01" controls preload="auto">
+  <source src="./#####" type="audio/mp3">
+</audio>
+<select id="speedController" name="speed" onChange="document.getElementById('audio01').playbackRate=this.value">
+  <option>0.25</option>
+  <option>0.5</option>
+  <option>0.75</option>
+  <option selected="true">1.0</option>
+  <option>1.25</option>
+  <option>1.5</option>
+  <option>1.75</option>
+  <option>2.0</option>
+</select>
+<input type="button" id="pressButton" value="Press and Hold to Rec." onMousedown="recStart();" onMouseup="recStop();">
+<input type="button" id="rplayButton" value="Replay" disabled="true" onClick="playIt();">
+<audio id="audio02"></audio>
+<hr>
+
+<a href="javascript:partialPlay(6.72,11.86);">Not specified.</a>
+<hr>
+<a href="javascript:partialPlay(21.57,23.94);">Not specified.</a>
+<hr>
+
+
+<script>
+async function partialPlay(start, stop) {
+  var sc = document.getElementById("speedController");
+  sc.disabled = true;
+  var player = document.getElementById("audio01");
+  player.currentTime = start;
+  player.play();
+  speed = sc.value;
+  await sleep((stop * 1000 - start * 1000) / speed);
+  player.pause();
+  sc.disabled = false;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+navigator.mediaDevices.getUserMedia(
+  {
+    audio: true,
+  })
+  .then (successFunc)
+  .catch( function (err) {
+    alert(err);
+  }
+);
+
+var recorder;
+var chunks = [];
+
+function recStart() {
+  document.getElementById("rplayButton").disabled = true;
+  document.getElementById("pressButton").value = "Release to Stop Rec.";
+  chunks = [];
+  recorder.start();
+}
+
+
+async function recStop() {
+  document.getElementById("pressButton").value = "Press and Hold to Rec.";
+  recorder.stop();
+  await sleep(1000);
+  playIt();
+}
+
+function playIt() {
+  var audioParts = document.getElementById("audio02");
+  audioParts.src = window.URL.createObjectURL(new Blob(chunks, { 'type' : 'audio/ogg; codecs=opus' }));
+  audioParts.play();
+  document.getElementById("rplayButton").disabled = false;
+}
+
+function successFunc(stream) {
+  recorder = new MediaRecorder(stream);
+
+  recorder.addEventListener('dataavailable', function(ele) {
+    if (ele.data.size > 0) {
+      chunks.push(ele.data);
+    }
+  });
+}
+</script>
