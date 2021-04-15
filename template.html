@@ -1,4 +1,4 @@
-﻿<audio id="audio01" controls preload="auto">
+﻿<audio id="audio01" preload="auto">
   <source src="./#####" type="audio/mp3">
 </audio>
 <select id="speedController" name="speed" onChange="document.getElementById('audio01').playbackRate=this.value">
@@ -23,7 +23,13 @@
 
 
 <script>
+
+var inPlay = false;
 async function partialPlay(start, stop) {
+  if (inPlay) {
+    return;
+  }
+  inPlay = true;
   var sc = document.getElementById("speedController");
   sc.disabled = true;
   var player = document.getElementById("audio01");
@@ -33,6 +39,7 @@ async function partialPlay(start, stop) {
   await sleep((stop * 1000 - start * 1000) / speed);
   player.pause();
   sc.disabled = false;
+  inPlay = false;
 }
 
 function sleep(ms) {
